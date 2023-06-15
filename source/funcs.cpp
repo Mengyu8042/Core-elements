@@ -14,4 +14,3 @@ SEXP eigenMultSolveSp(SparseMatrix<double> X, SparseMatrix<double> XX, VectorXd 
   
   return Rcpp::wrap(C);
 }
-

@@ -43,16 +43,15 @@ set.seed(2000)
 ind_shuffle <- sample(N, N, replace = FALSE)
 X_std <- X_std[ind_shuffle, ]
 Y_std <- Y_std[ind_shuffle]
+rm(ind_shuffle)
 
-## Remove outliers ##
-U <- fast.svd(X_std)$u
-PP <- rowSums(U^2)
-X_out <- boxplot(PP, plot = FALSE)$out
-ind_out <- which(PP %in% X_out)
-X_std <- X_std[-ind_out, ]
-Y_std <- Y_std[-ind_out]
-N <- nrow(X_std)
-rm(ind_shuffle, U, PP, X_out, ind_out)
+## Simulate the response ##
+simu_y <- FALSE  # using simulated y if TURE; else using real y
+if (simu_y == TRUE) {
+  beta_true <- rep(1, p)
+  Y_raw <- as.vector(X_std %*% beta_true)
+  Y_std <- Y_raw + rnorm(N, 0, sd(Y_raw)/2)  # simulated response
+}
 
 ## Fit the model ##
 fit <- lm(Y_std ~ X_std - 1)
@@ -61,7 +60,8 @@ Y_pred <- X_std %*% beta_ols  # predicted response
 Res <- Y_std - Y_pred  # residuals
 
 ## Set parameters ##
-sub_meta <- c(2^4, 2^6, 2^8, 2^10, 2^12) * p  # subsample parameter r
+boot_type <- "boot_res"  # "boot_pair" or "boot_res"
+sub_meta <- c(2^4, 2^5, 2^6, 2^7, 2^8) * p  # subsample parameter r
 nloop <- 100  # number of replicates
 num_method <- 6
 mse_meta <- array(0, dim = c(nloop, num_method, length(sub_meta)))
@@ -72,8 +72,13 @@ for (i in 1:nloop) {
   set.seed(200 + 123 * i)
   ## Bootstrap ##
   id <- sample(1:N, N, replace = TRUE)  
-  X <- X_std
-  Y <- Y_pred + Res[id]
+  if (boot_type == "boot_pair") {
+    X <- X_std[id, ]
+    Y <- Y_std[id]
+  } else if (boot_type == "boot_res") {
+    X <- X_std
+    Y <- Y_pred + Res[id]
+  } 
   
   ## Compute the sampling probabilities for BLEV and SLEV ##
   U <- fast.svd(X)$u
@@ -191,7 +196,11 @@ for (i in 1:nloop) {
     coef <- cbind(unif_temp, blev_temp, slev_temp, iboss_temp, 
                   core_temp, core_dc)
     coef[is.na(coef)] <- 0
-    coef_mse <- colMeans((coef - beta_ols)^2)/mean(beta_ols^2)
+    if (simu_y == TRUE) {
+      coef_mse <- colMeans((coef - beta_true)^2)/mean(beta_true^2)
+    } else {
+      coef_mse <- colMeans((coef - beta_ols)^2)/mean(beta_ols^2)
+    }
     mse_temp[, j] <- coef_mse
   }
   
@@ -218,7 +227,7 @@ mse_mat <- data.frame(mse = c(apply(UNIF, 2, mean), apply(BLEV, 2, mean),
 mse_mat$Method <- factor(mse_mat$Method, levels = c("UNIF", "BLEV", "SLEV",
                                                     "IBOSS", "CORE", "MOM-CORE"))
 
-pd <- position_dodge(0.1)
+pd <- position_dodge(0.05)
 p1 <- ggplot(mse_mat, aes(x = sub, y = mse, group = Method, colour = Method))
 p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(), 
                                panel.grid.minor = element_blank(),
@@ -229,8 +238,8 @@ p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(),
                                legend.title = element_blank(),
                                legend.key.width = unit(3, "line"), 
                                legend.key.height = unit(1.5, "line"),
-                               legend.text = element_text(size = 15)) + 
-  geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 0.5, position = pd, show.legend = FALSE) +
+                               legend.text = element_text(size = 16)) + 
+  geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 0.25, position = pd, show.legend = FALSE) +
   geom_line(aes(linetype = Method, size = Method), position = pd) + 
   geom_point(position = pd, aes(shape = Method), size = 2) + 
   scale_shape_manual(values = c(8, 4, 5, 7, 1, 2)) + 

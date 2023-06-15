@@ -18,5 +18,9 @@ For simulation study in Section 5,
 * you can run `simu_prediction.R` with `is_corrupt <- FALSE` (or `is_corrupt <- TRUE`) to reproduce the results in Fig. 3 (or Fig. 6).
 
 For data analysis in Section 6,
-* you can run `example1_estimation.R` and `example1_prediction.R` to reproduce the results in Fig. 7;
-* you can run `example2_estimation.R` and `example2_prediction.R` to reproduce the results in Fig. 8.
+* you can run `example1_estimation.R` and `example1_prediction.R` to reproduce the results in Fig. 9;
+* you can run `example2_estimation.R` and `example2_prediction.R` to reproduce the results in Fig. 12.
+
+For data analysis in Section S2.2,
+* you can run `example2_estimation.R` and `example2_prediction.R` with `boot_type <- "boot_pair"` to reproduce the results in Fig. 3;
+* you can run `example2_estimation.R` and `example2_prediction.R` with `simu_y <- TRUE` and `boot_type <- "boot_pair"` (resp. `boot_type <- "boot_res"`) to reproduce the results in Fig. 4(a) (resp. Fig. 4(b)).

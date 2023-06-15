@@ -44,25 +44,15 @@ set.seed(2000)
 ind_shuffle <- sample(N, N, replace = FALSE)
 X_std <- X_std[ind_shuffle, ]
 Y_std <- Y_std[ind_shuffle]
-
-## Remove outliers ##
-U <- fast.svd(X_std)$u
-PP <- rowSums(U^2)
-X_out <- boxplot(PP, plot = FALSE)$out
-ind_out <- which(PP %in% X_out)
-X_std <- X_std[-ind_out, ]
-Y_std <- Y_std[-ind_out]
-N <- nrow(X_std)
-rm(ind_shuffle, U, PP, X_out, ind_out)
+rm(ind_shuffle)
 
 ## Fit the model ##
 fit <- lm(Y_std ~ X_std)
 beta_ols <- fit$coefficients[-1]
-Y_pred <- X_std %*% beta_ols  # predicted response
-Res <- Y_std - Y_pred  # residuals
+rm(fit)
 
 ## Set parameters ##
-sub_meta <- (1:5) * 2 * p  # subsample parameter r
+sub_meta <- c(2^1, 2^2, 2^3, 2^4, 2^5) * p  # subsample parameter r
 nloop <- 100  # number of replicates
 num_method <- 6
 mse_meta <- array(0, dim = c(nloop, num_method, length(sub_meta)))
@@ -73,8 +63,8 @@ for (i in 1:nloop) {
   set.seed(200 + 123 * i)
   ## Bootstrap ##
   id <- sample(1:N, N, replace = TRUE)
-  X <- X_std
-  Y <- Y_pred + Res[id]
+  X <- X_std[id, ]
+  Y <- Y_std[id]
   
   ## Compute the sampling probabilities for BLEV and SLEV ##
   U <- fast.svd(X)$u
@@ -212,7 +202,7 @@ mse_mat <- data.frame(mse = c(apply(UNIF, 2, mean), apply(BLEV, 2, mean),
                              apply(CORE, 2, sd), apply(CORE_MOM, 2, sd)), 
                       Method = factor(rep(c("UNIF", "BLEV", "SLEV", "IBOSS", "CORE", "MOM-CORE"),
                                           each = length(sub_meta))), 
-                      sub = rep(sub_meta/p, num_method))
+                      sub = rep(log(sub_meta/p), num_method))
 mse_mat$Method <- factor(mse_mat$Method, levels = c("UNIF", "BLEV", "SLEV",
                                                     "IBOSS", "CORE", "MOM-CORE"))
 
@@ -235,7 +225,7 @@ p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(),
   scale_linetype_manual(values = c(5, 4, 3, 2, 1, 1)) +
   scale_size_manual(values = c(1, 1, 1, 1, 1, 1)) +
   scale_color_manual(values = c("#999999", "#0033CC", "#3399FF", "orchid", "red", "#FF9900")) + 
-  labs(x = "r/p", y = "log(MSE)") +
+  labs(x = "log(r/p)", y = "log(MSE)") +
   theme(plot.title = element_text(hjust = 0.5, size = 19))
 p23
 ggsave(filename = "example1_mse.png", width = 6, height = 3.5, units = "in", dpi = 300)
