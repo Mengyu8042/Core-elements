@@ -49,9 +49,11 @@ rm(ind_shuffle)
 ## Fit the model ##
 fit <- lm(Y_std ~ X_std)
 beta_ols <- fit$coefficients[-1]
-rm(fit)
+Y_pred <- X_std %*% beta_ols  # predicted response
+Res <- Y_std - Y_pred  # residuals
 
 ## Set parameters ##
+boot_type <- "boot_res"  # "boot_pair" or "boot_res"
 sub_meta <- c(2^1, 2^2, 2^3, 2^4, 2^5) * p  # subsample parameter r
 nloop <- 100  # number of replicates
 num_method <- 6
@@ -62,9 +64,14 @@ mse_temp <- matrix(0, num_method, length(sub_meta))
 for (i in 1:nloop) {
   set.seed(200 + 123 * i)
   ## Bootstrap ##
-  id <- sample(1:N, N, replace = TRUE)
-  X <- X_std[id, ]
-  Y <- Y_std[id]
+  id <- sample(1:N, N, replace = TRUE)  
+  if (boot_type == "boot_pair") {
+    X <- X_std[id, ]
+    Y <- Y_std[id]
+  } else if (boot_type == "boot_res") {
+    X <- X_std
+    Y <- Y_pred + Res[id]
+  } 
   
   ## Compute the sampling probabilities for BLEV and SLEV ##
   U <- fast.svd(X)$u
@@ -131,9 +138,11 @@ for (i in 1:nloop) {
     for (kk in 1:p) {
       col <- abs(X[, kk])
       if (thres[kk] > 0)
-        id <- which(col >= thres[kk])[1:sub] else id <- which(col != 0)
-        XX[id, kk] <- X[id, kk]
-        idd <- unique(c(idd, id))
+        id <- which(col >= thres[kk])[1:sub] 
+      else 
+        id <- which(col != 0)
+      XX[id, kk] <- X[id, kk]
+      idd <- unique(c(idd, id))
     }
     xxt <- XX[idd, ]
     yyt <- Y[idd]
@@ -158,9 +167,11 @@ for (i in 1:nloop) {
       for (kk in 1:p) {
         col <- abs(X_k[, kk])
         if (thres[kk] > 0)
-          id <- which(col >= thres[kk])[1:ceil(sub/K)] else id <- which(col != 0)
-          XX_k[id, kk] <- X_k[id, kk]
-          idd <- unique(c(idd, id))
+          id <- which(col >= thres[kk])[1:ceil(sub/K)] 
+        else 
+          id <- which(col != 0)
+        XX_k[id, kk] <- X_k[id, kk]
+        idd <- unique(c(idd, id))
       }
       xxt_k <- XX_k[idd, ]
       yyt_k <- Y_k[idd]
