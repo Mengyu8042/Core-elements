@@ -137,10 +137,9 @@ for (i in 1:nloop) {
     thres <- colnth(abs(X), rep(sub, p), descending = TRUE, parallel = FALSE)
     for (kk in 1:p) {
       col <- abs(X[, kk])
-      if (thres[kk] > 0)
-        id <- which(col >= thres[kk])[1:sub] 
-      else 
-        id <- which(col != 0)
+      id1 <- which(col > thres[kk])
+      id2 <- which(col == thres[kk])[1:(sub - length(id1))]
+      id <- c(id1, id2)
       XX[id, kk] <- X[id, kk]
       idd <- unique(c(idd, id))
     }
@@ -166,10 +165,9 @@ for (i in 1:nloop) {
       thres <- colnth(abs(X_k), rep(ceil(sub/K), p), descending = TRUE, parallel = FALSE)
       for (kk in 1:p) {
         col <- abs(X_k[, kk])
-        if (thres[kk] > 0)
-          id <- which(col >= thres[kk])[1:ceil(sub/K)] 
-        else 
-          id <- which(col != 0)
+        id1 <- which(col > thres[kk])
+        id2 <- which(col == thres[kk])[1:(ceil(sub/K) - length(id1))]
+        id <- c(id1, id2)
         XX_k[id, kk] <- X_k[id, kk]
         idd <- unique(c(idd, id))
       }
