@@ -21,22 +21,23 @@ setwd(pwd())
 sourceCpp("source/funcs.cpp")
 
 ## Load data ##
-load("data/higgs.RData")
-data <- data[, -1]
-X_true <- as.matrix(data[, 1:21])  # observed design matrix
-Y_true <- data[, 24]  # observed response
+load("data/scRNA_top3000.RData")
+data <- as.matrix(data)
+id_y <- order(colSums(data != 0), decreasing = TRUE)[1]
+Y_true <- data[, id_y]  # observed response
+data <- data[, -id_y]
+X_true <- data[, order(apply(data, 2, sd), decreasing = TRUE)[1:500]]  # observed design matrix
+id <- which(rowSums(X_true) != 0)
+X_true <- X_true[id, ]
+Y_true <- Y_true[id]
 N <- nrow(X_true)  # sample size
 p <- ncol(X_true)  # dimension
 
 ## Standardize data ##
-X_bar <- colMeans(X_true)
-X_sd <- apply(X_true, 2, sd)
-X_std <- matrix(0, N, p)  # standardized design matrix
-for (i in 1:N) {
-  X_std[i, ] <- (X_true[i, ] - X_bar)/X_sd
-}
-Y_std <- (Y_true - mean(Y_true))/sd(Y_true)  # standardized response
-rm(data, X_true, Y_true, X_bar, X_sd)
+X_scale <- matrix(rep(apply(X_true, 2, sd), N), N, p, byrow = TRUE)
+X_std <- X_true/X_scale  # standardized design matrix
+Y_std <- Y_true/sd(Y_true)  # standardized response
+rm(data, X_true, Y_true, X_scale)
 
 ## Shuffle data ##
 set.seed(2000)
@@ -45,54 +46,26 @@ X_std <- X_std[ind_shuffle, ]
 Y_std <- Y_std[ind_shuffle]
 rm(ind_shuffle)
 
-## Simulate the response ##
-simu_y <- FALSE  # using simulated y if TURE; else using real y
-if (simu_y == TRUE) {
-  beta_true <- rep(1, p)
-  Y_raw <- as.vector(X_std %*% beta_true)
-  Y_std <- Y_raw + rnorm(N, 0, sd(Y_raw)/2)  # simulated response
-}
-
 ## Fit the model ##
-fit <- lm(Y_std ~ X_std - 1)
-beta_ols <- fit$coefficients
+fit <- lm(Y_std ~ X_std)
+beta_ols <- fit$coefficients[-1]
 Y_pred <- X_std %*% beta_ols  # predicted response
 Res <- Y_std - Y_pred  # residuals
 
 ## Set parameters ##
-boot_type <- "boot_res"  # "boot_pair" or "boot_res"
-sub_meta <- c(2^4, 2^5, 2^6, 2^7, 2^8) * p  # subsample parameter r
+sub_meta <- c(2^1, 2^2, 2^3, 2^4, 2^5) * p  # subsample parameter r
 nloop <- 100  # number of replicates
-num_method <- 8
-N_train <- floor(0.7 * N)  # training set size
-N_test <- N - N_train  # testing set size
+num_method <- 6
 mse_meta <- array(0, dim = c(nloop, num_method, length(sub_meta)))
 mse_temp <- matrix(0, num_method, length(sub_meta))
 
 ## Beginning ##
-for(i in 1:nloop){
+for (i in 1:nloop) {
   set.seed(200 + 123 * i)
   ## Bootstrap ##
   id <- sample(1:N, N, replace = TRUE)  
-  if (boot_type == "boot_pair") {
-    X <- X_std[id, ]
-    Y <- Y_std[id]
-  } else if (boot_type == "boot_res") {
-    X <- X_std
-    Y <- Y_pred + Res[id]
-  } 
-  
-  ## Partition the training and testing sets ##
-  id <- sample(1:N, N_train, replace = FALSE)
-  X_test <- X[-id, ]
-  Y_test <- Y[-id]
-  X <- X[id, ]
-  Y <- Y[id]
-  
-  ## Full sample OLS ##
-  fit <- lm(Y ~ X - 1)
-  ols_temp <- fit$coefficients
-  rm(fit)
+  X <- X_std[id, ]
+  Y <- Y_std[id]
 
   ## Compute the sampling probabilities for BLEV and SLEV ##
   U <- fast.svd(X)$u
@@ -101,7 +74,7 @@ for(i in 1:nloop){
   prob_slev <- 0.9 * prob_blev + 0.1/nrow(X)
   rm(id, U, PP)
   
-  for(j in 1:length(sub_meta)){
+  for (j in 1:length(sub_meta)) {
     print(c(i, j))
     set.seed(100 + 821 * j + 123 * i)
     sub <- sub_meta[j]
@@ -111,8 +84,8 @@ for(i in 1:nloop){
     id <- sample(nrow(X), sub, replace = TRUE)
     xt <- X[id, ]
     yt <- Y[id]
-    fit <- lm(yt ~ xt - 1)
-    unif_temp <- fit$coefficients
+    fit <- lm(yt ~ xt)
+    unif_temp <- fit$coefficients[-1]
     rm(id, xt, yt, fit)
     
     # BLEV
@@ -120,18 +93,18 @@ for(i in 1:nloop){
     xt <- X[id, ]
     yt <- Y[id]
     wgt <- 1/prob_blev[id]
-    fit <- lm(yt ~ xt - 1, weights = wgt)
-    blev_temp <- fit$coefficients
-    rm(id, xt, yt, fit, wgt)
+    fit <- lm(yt ~ xt, weights = wgt)
+    blev_temp <- fit$coefficients[-1]
+    rm(id, xt, yt, wgt, fit)
     
     # SLEV
     id <- sample(nrow(X), sub, replace = TRUE, prob_slev)
     xt <- X[id, ]
     yt <- Y[id]
     wgt <- 1/prob_slev[id]
-    fit <- lm(yt ~ xt - 1, weights = wgt)
-    slev_temp <- fit$coefficients
-    rm(id, xt, yt, fit, wgt)
+    fit <- lm(yt ~ xt, weights = wgt)
+    slev_temp <- fit$coefficients[-1]
+    rm(id, xt, yt, wgt, fit)
     
     # IBOSS
     id <- NULL
@@ -139,17 +112,17 @@ for(i in 1:nloop){
     ssub <- floor(sub/p/2)
     for (k in 1:p) {
       X_c[id, ] <- NA
-      thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE)
+      thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE, na.rm = TRUE)
       id1 <- which(X_c[, k] >= thres1)[1:ssub]
-      thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE)
+      thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE, na.rm = TRUE)
       id2 <- which(X_c[, k] <= thres2)[1:ssub]
       id <- c(id, id1, id2)
     }
     xt <- X[id, ]
     yt <- Y[id]
     
-    fit <- lm(yt ~ xt - 1)
-    iboss_temp <- fit$coefficients
+    fit <- lm(yt ~ xt)
+    iboss_temp <- fit$coefficients[-1]
     rm(X_c, id1, id2, id, xt, yt, fit)
     
     # CORE
@@ -171,18 +144,15 @@ for(i in 1:nloop){
     xt1 <- Matrix(xt, sparse = TRUE)
     xxt1 <- Matrix(xxt, sparse = TRUE)
     core_temp <- eigenMultSolveSp(xt1, xxt1, yyt)
-    rm(XX, col, thres, id1, id2, id, idd, xt, xxt, yyt, xt1, xxt1)
+    rm(XX, col, thres, id, idd, xt, xxt, yyt, xt1, xxt1)
     
-    # MOM-OLS & MOM-CORE
+    # MOM-CORE
     K <- 5  # number of blocks
-    ols_dc_temp <- matrix(0, K, p)
     core_dc_temp <- matrix(0, K, p)
     M <- floor(nrow(X)/K)
     for (k in 1:K) {
       X_k <- X[((k - 1) * M + 1):(k * M), ]
       Y_k <- Y[((k - 1) * M + 1):(k * M)]
-      
-      ols_dc_temp[k, ] <- lm(Y_k ~ X_k - 1)$coefficients
       
       XX_k <- matrix(0, M, p)
       idd <- NULL
@@ -204,19 +174,15 @@ for(i in 1:nloop){
       core_dc_temp[k, ] <- eigenMultSolveSp(xt1_k, xxt1_k, yyt_k)
     }
     
-    ols_dc_temp <- na.omit(ols_dc_temp)
-    ols_dc <- spat.med(ols_dc_temp, tol = 1e-09)
-    
     core_dc_temp <- na.omit(core_dc_temp)
     core_dc <- spat.med(core_dc_temp, tol = 1e-09)
-    rm(XX_k, X_k, Y_k, thres, id1, id2, id, idd, xt_k, xxt_k, yyt_k, xt1_k, xxt1_k)
+    rm(XX_k, X_k, Y_k, thres, id, idd, xt_k, xxt_k, yyt_k, xt1_k, xxt1_k)
     
     
     ######################################################
-    coef <- cbind(ols_temp, ols_dc, unif_temp, blev_temp, slev_temp, iboss_temp, 
-                  core_temp, core_dc)
+    coef <- cbind(unif_temp, blev_temp, slev_temp, iboss_temp, core_temp, core_dc)
     coef[is.na(coef)] <- 0
-    coef_mse <- colMeans((X_test %*% coef - Y_test)^2)/mean(Y_test^2)
+    coef_mse <- colMeans((coef - beta_ols)^2)/mean(beta_ols^2)
     mse_temp[, j] <- coef_mse
   }
   
@@ -224,28 +190,26 @@ for(i in 1:nloop){
 }
 
 ## Plot the results ##
-OLS <- log(mse_meta[, 1, ])
-OLS_MOM <- log(mse_meta[, 2, ])
-UNIF <- log(mse_meta[, 3, ])
-BLEV <- log(mse_meta[, 4, ])
-SLEV <- log(mse_meta[, 5, ])
-IBOSS <- log(mse_meta[, 6, ])
-CORE <- log(mse_meta[, 7, ])
-CORE_MOM <- log(mse_meta[, 8, ])
+UNIF <- log(mse_meta[, 1, ])
+BLEV <- log(mse_meta[, 2, ])
+SLEV <- log(mse_meta[, 3, ])
+IBOSS <- log(mse_meta[, 4, ])
+CORE <- log(mse_meta[, 5, ])
+CORE_MOM <- log(mse_meta[, 6, ])
 
-mse_mat <- data.frame(mse = c(apply(OLS, 2, mean), apply(OLS_MOM, 2, mean), apply(UNIF, 2, mean), 
-                              apply(BLEV, 2, mean), apply(SLEV, 2, mean), apply(IBOSS, 2, mean), 
-                              apply(CORE, 2, mean), apply(CORE_MOM, 2, mean)), 
-                      sd = c(apply(OLS, 2, sd), apply(OLS_MOM, 2, sd), apply(UNIF, 2, sd), 
-                             apply(BLEV, 2, sd), apply(SLEV, 2, sd), apply(IBOSS, 2, sd), 
+mse_mat <- data.frame(mse = c(apply(UNIF, 2, mean), apply(BLEV, 2, mean),
+                              apply(SLEV, 2, mean), apply(IBOSS, 2, mean), 
+                              apply(CORE, 2, mean), apply(CORE_MOM, 2, mean)),
+                      sd = c(apply(UNIF, 2, sd), apply(BLEV, 2, sd), 
+                             apply(SLEV, 2, sd), apply(IBOSS, 2, sd), 
                              apply(CORE, 2, sd), apply(CORE_MOM, 2, sd)), 
-                      Method = factor(rep(c("FullOLS", "MOM-OLS", "UNIF", "BLEV", 
-                                            "SLEV", "IBOSS", "CORE", "MOM-CORE"), 
-                                          each = length(sub_meta))),
+                      Method = factor(rep(c("UNIF", "BLEV", "SLEV", "IBOSS", "CORE", "MOM-CORE"),
+                                          each = length(sub_meta))), 
                       sub = rep(log(sub_meta/p), num_method))
-mse_mat$Method <- factor(mse_mat$Method, levels = c("FullOLS", "MOM-OLS", "UNIF", "BLEV", 
-                                                    "SLEV", "IBOSS", "CORE", "MOM-CORE"))
+mse_mat$Method <- factor(mse_mat$Method, levels = c("UNIF", "BLEV", "SLEV",
+                                                    "IBOSS", "CORE", "MOM-CORE"))
 
+pdf("realdata_mse.pdf", width = 3.5, height = 3.5)
 pd <- position_dodge(0.05)
 p1 <- ggplot(mse_mat, aes(x = sub, y = mse, group = Method, colour = Method))
 p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(), 
@@ -253,20 +217,21 @@ p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(),
                                panel.border = element_rect(colour = "black"), 
                                axis.text = element_text(size = 17),
                                axis.title = element_text(size = 17), 
-                               legend.position = "right", 
+                               legend.position = "", 
                                legend.title = element_blank(),
                                legend.key.width = unit(3, "line"), 
                                legend.key.height = unit(1.5, "line"),
-                               legend.text = element_text(size = 16)) + 
+                               legend.text = element_text(size = 15)) + 
   geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 0.25, position = pd, show.legend = FALSE) +
   geom_line(aes(linetype = Method, size = Method), position = pd) + 
   geom_point(position = pd, aes(shape = Method), size = 2) + 
-  scale_shape_manual(values = c(9, 6, 8, 4, 5, 7, 1, 2)) + 
-  scale_linetype_manual(values = c(6, 3, 5, 4, 3, 2, 1, 1)) + 
-  scale_size_manual(values = c(1, 1, 1, 1, 1, 1, 1, 1)) + 
-  scale_color_manual(values = c("grey2", "brown", "#999999", "#0033CC",
-                                "#3399FF", "orchid", "red", "#FF9900")) + 
-  labs(x = "log(r/p)", y = "log(PMSE)") + 
+  scale_shape_manual(values = c(8, 4, 5, 7, 1, 2)) + 
+  scale_linetype_manual(values = c(5, 4, 3, 2, 1, 1)) +
+  scale_size_manual(values = c(1, 1, 1, 1, 1, 1)) +
+  scale_color_manual(values = c("#999999", "#0033CC", "#3399FF", "orchid", "red", "#FF9900")) + 
+  labs(x = "log(r/p)", y = "log(MSE)") +
   theme(plot.title = element_text(hjust = 0.5, size = 19))
 p23
-ggsave(filename = "example2_pmse.png", width = 6, height = 3.5, units = "in", dpi = 300)
+dev.off()
+
+save(mse_meta, mse_mat, sub_meta, p, num_method, p1, p23, file = "realdata_mse.RData")

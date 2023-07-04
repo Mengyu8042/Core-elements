@@ -132,7 +132,7 @@ for (case_type in c("D1", "D2", "D3")) {
       } else if (case[2] == "R5") {
         X <- xSparse(X, 0.8)
       }
-      # X = X + matrix(runif(N * p, -0.1, 0.1), N, p)  # numerically sparse
+      X <- X + matrix(runif(N * p, -0.1, 0.1), N, p)  # numerically sparse
       
       id_nz <- which(rowSums(abs(X)) != 0)
       X <- X[id_nz, ]
@@ -201,9 +201,9 @@ for (case_type in c("D1", "D2", "D3")) {
         
         for (k in 1:p) {
           X_c[id, ] <- NA
-          thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE)
+          thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE, na.rm = TRUE)
           id1 <- which(X_c[, k] >= thres1)[1:ssub]
-          thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE)
+          thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE, na.rm = TRUE)
           id2 <- which(X_c[, k] <= thres2)[1:ssub]
           id <- c(id, id1, id2)
         }
@@ -292,7 +292,7 @@ for (case_type in c("D1", "D2", "D3")) {
       mse_mat$Method <- factor(mse_mat$Method, levels = c("UNIF", "BLEV", "SLEV", "IBOSS", "CORE", "MOM-CORE"))
       
       if (fig_num == 15) {
-        leg_pos <- c(0.6, 0.69)
+        leg_pos <- c(0.58, 0.67)
       } else {
         leg_pos <- ""
       }
@@ -308,7 +308,7 @@ for (case_type in c("D1", "D2", "D3")) {
                                      legend.background = element_rect(fill = alpha("white", 0.6), color = "black"), 
                                      legend.key.width = unit(3, "line"),
                                      legend.key.height = unit(1, "line"), 
-                                     legend.text = element_text(size = 13)) +
+                                     legend.text = element_text(size = 17)) +
         geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 1.5, position = pd, show.legend = FALSE) + 
         geom_line(aes(linetype = Method, size = Method), position = pd) + 
         geom_point(position = pd, aes(shape = Method), size = 2) + 
@@ -330,7 +330,7 @@ for (case_type in c("D1", "D2", "D3")) {
       mse_mat$Method <- factor(mse_mat$Method, levels = c("UNIF", "BLEV", "SLEV", "IBOSS", "CORE"))
       
       if (fig_num == 15) {
-        leg_pos <- c(0.73, 0.73)
+        leg_pos <- c(0.71, 0.71)
       } else {
         leg_pos <- ""
       }
@@ -346,7 +346,7 @@ for (case_type in c("D1", "D2", "D3")) {
                                      legend.background = element_rect(fill = alpha("white", 0.6), color = "black"), 
                                      legend.key.width = unit(3, "line"), 
                                      legend.key.height = unit(1, "line"), 
-                                     legend.text = element_text(size = 13)) + 
+                                     legend.text = element_text(size = 17)) + 
         geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 1, position = pd, show.legend = FALSE) +
         geom_line(aes(linetype = Method, size = Method), position = pd) +
         geom_point(position = pd, aes(shape = Method), size = 2) +

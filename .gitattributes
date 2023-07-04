@@ -1,2 +1,1 @@
-data/higgs.RData filter=lfs diff=lfs merge=lfs -text
 data/scRNA_top3000.RData filter=lfs diff=lfs merge=lfs -text

@@ -53,7 +53,6 @@ Y_pred <- X_std %*% beta_ols  # predicted response
 Res <- Y_std - Y_pred  # residuals
 
 ## Set parameters ##
-boot_type <- "boot_res"  # "boot_pair" or "boot_res"
 sub_meta <- c(2^1, 2^2, 2^3, 2^4, 2^5) * p  # subsample parameter r
 nloop <- 100  # number of replicates
 num_method <- 8
@@ -67,13 +66,8 @@ for(i in 1:nloop){
   set.seed(200 + 123 * i)
   ## Bootstrap ##
   id <- sample(1:N, N, replace = TRUE)  
-  if (boot_type == "boot_pair") {
-    X <- X_std[id, ]
-    Y <- Y_std[id]
-  } else if (boot_type == "boot_res") {
-    X <- X_std
-    Y <- Y_pred + Res[id]
-  } 
+  X <- X_std[id, ]
+  Y <- Y_std[id]
   
   ## Partition the training and testing sets ##
   id <- sample(1:N, N_train, replace = FALSE)
@@ -132,9 +126,9 @@ for(i in 1:nloop){
     ssub <- floor(sub/p/2)
     for (k in 1:p) {
       X_c[id, ] <- NA
-      thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE)
+      thres1 <- Rfast::nth(X_c[, k], ssub, descending = TRUE, na.rm = TRUE)
       id1 <- which(X_c[, k] >= thres1)[1:ssub]
-      thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE)
+      thres2 <- Rfast::nth(X_c[, k], ssub, descending = FALSE, na.rm = TRUE)
       id2 <- which(X_c[, k] <= thres2)[1:ssub]
       id <- c(id, id1, id2)
     }
@@ -239,19 +233,20 @@ mse_mat <- data.frame(mse = c(apply(OLS, 2, mean), apply(OLS_MOM, 2, mean), appl
 mse_mat$Method <- factor(mse_mat$Method, levels = c("FullOLS", "MOM-OLS", "UNIF", "BLEV", 
                                                     "SLEV", "IBOSS", "CORE", "MOM-CORE"))
 
-
+pdf("realdata_pmse.pdf", width = 6, height = 3.5)
 pd <- position_dodge(0.05)
 p1 <- ggplot(mse_mat, aes(x = sub, y = mse, group = Method, colour = Method))
 p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(), 
                                panel.grid.minor = element_blank(),
-                               panel.border = element_rect(colour = "black"), 
-                               axis.text = element_text(size = 17),
-                               axis.title = element_text(size = 17), 
+                               panel.border = element_rect(colour = "black"),
+                               axis.text = element_text(size = 19), 
+                               axis.title = element_text(size = 19),
                                legend.position = "right", 
                                legend.title = element_blank(),
-                               legend.key.width = unit(3, "line"), 
-                               legend.key.height = unit(1.5, "line"),
-                               legend.text = element_text(size = 16)) + 
+                               legend.background = element_rect(fill = alpha("white", 0.6), color = "black"), 
+                               legend.key.width = unit(3, "line"),
+                               legend.key.height = unit(1, "line"), 
+                               legend.text = element_text(size = 17)) +
   geom_errorbar(aes(ymin = mse - sd, ymax = mse + sd), width = 0.25, position = pd, show.legend = FALSE) +
   geom_line(aes(linetype = Method, size = Method), position = pd) + 
   geom_point(position = pd, aes(shape = Method), size = 2) + 
@@ -263,4 +258,6 @@ p23 <- p1 + theme_bw() + theme(panel.grid.major = element_blank(),
   labs(x = "log(r/p)", y = "log(PMSE)") + 
   theme(plot.title = element_text(hjust = 0.5, size = 19))
 p23
-ggsave(filename = "example1_pmse.png", width = 6, height = 3.5, units = "in", dpi = 300)
+dev.off()
+
+save(mse_meta, mse_mat, sub_meta, p, num_method, p1, p23, file = "realdata_pmse.RData")
