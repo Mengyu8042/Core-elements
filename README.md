@@ -1,5 +1,5 @@
-# Core-elements for classical linear regression
-This repository includes the implementation of our work **"Core-elements for classical linear regression"**.
+# Core-Elements for Large-Scale Least Squares Estimation
+This repository includes the implementation of our work **"Core-Elements for Large-Scale Least Squares Estimation"**.
 
 
 ## Introduction
