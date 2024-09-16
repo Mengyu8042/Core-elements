@@ -4,7 +4,7 @@ This repository includes the implementation of our work **"Core-Elements for Lar
 
 If you use this toolbox in your research and find it useful, please cite:
 ```
-@article{li2022core,
+@article{li2024core,
   title={Core-Elements for Large-Scale Least Squares Estimation},
   author={Li, Mengyu and Yu, Jun and Li, Tao and Meng, Cheng},
   journal={Statistics and Computing},
